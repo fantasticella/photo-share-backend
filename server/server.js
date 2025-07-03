@@ -4,7 +4,7 @@ const session = require('express-session');
 const path = require('path');
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: 'https://photo-share-frontend-kappa.vercel.app', credentials: true }));
 app.use(express.json());
 app.use(session({ secret: 'mysecret', resave: false, saveUninitialized: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
