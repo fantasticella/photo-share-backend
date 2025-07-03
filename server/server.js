@@ -5,7 +5,7 @@ const path = require('path');
 
 const app = express();
 
-// === CORS must be at top before routes ===
+// === CORS setup (must come before routes) ===
 app.use(cors({
   origin: 'https://photo-share-frontend-kappa.vercel.app',
   credentials: true
@@ -13,27 +13,28 @@ app.use(cors({
 
 app.use(express.json());
 
-// === SESSION (cookie setup) ===
+// === SESSION setup (cookie must allow cross-site access) ===
 app.use(session({
   secret: 'mysecret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    sameSite: 'none',
-    secure: true
+    sameSite: 'none',  // must be 'none' for cross-origin cookies
+    secure: true,      // must be true when using HTTPS (Render uses HTTPS)
+    httpOnly: false    // allow browser to send cookie (important for axios + Vercel)
   }
 }));
 
-// === Static files (images)
+// === Static file hosting (image uploads) ===
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// === Routes
+// === Routes ===
 const authRoutes = require('./auth');
 const uploadRoutes = require('./upload');
 
 app.use('/auth', authRoutes);
 app.use('/upload', uploadRoutes);
 
-// === Port
+// === Port ===
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
