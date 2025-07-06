@@ -1,48 +1,55 @@
 const express = require('express');
 const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
+const { v2: cloudinary } = require('cloudinary');
+const streamifier = require('streamifier');
+require('dotenv').config();
 
 const router = express.Router();
-
-const DATA_FILE = path.join(__dirname, 'data.json');
-
-// Load uploads from file (or empty array)
 let uploads = [];
-if (fs.existsSync(DATA_FILE)) {
-  uploads = JSON.parse(fs.readFileSync(DATA_FILE));
-}
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, 'uploads'),
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+// Cloudinary config from .env
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_URL.split('@')[1],
+  api_key: process.env.CLOUDINARY_URL.split('//')[1].split(':')[0],
+  api_secret: process.env.CLOUDINARY_URL.split(':')[2].split('@')[0],
 });
+
+// Use memory storage (not disk)
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// POST /upload
-router.post('/', upload.single('photo'), (req, res) => {
+router.post('/', upload.single('photo'), async (req, res) => {
   const { caption } = req.body;
   const user = req.session.user;
   if (!user) return res.status(401).send();
 
-  const newUpload = {
-    url: `/uploads/${req.file.filename}`,
-    caption,
-    user,
-    time: new Date().toISOString()
-  };
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'photo-share' },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve(result);
+        }
+      );
+      streamifier.createReadStream(req.file.buffer).pipe(stream);
+    });
 
-  uploads.push(newUpload);
-  fs.writeFileSync(DATA_FILE, JSON.stringify(uploads, null, 2)); // save to file
-
-  res.send({ success: true });
+    const newUpload = {
+      url: result.secure_url,
+      caption,
+      user,
+      time: new Date().toISOString()
+    };
+    uploads.push(newUpload);
+    res.send({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ success: false });
+  }
 });
 
-// GET /upload/all
-router.get('/all', (req, res) => {
+router.get('/', (req, res) => {
   res.send(uploads);
 });
 
