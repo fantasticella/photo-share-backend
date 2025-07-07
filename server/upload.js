@@ -5,18 +5,19 @@ const streamifier = require('streamifier');
 require('dotenv').config();
 
 const router = express.Router();
-let uploads = [];
 
-// Cloudinary config
+// ✅ Cloudinary config using .env
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// 🧠 In-memory storage for multer
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
+// === POST /upload ===
 router.post('/', upload.single('photo'), async (req, res) => {
   const { caption } = req.body;
   const user = req.session.user;
@@ -29,43 +30,54 @@ router.post('/', upload.single('photo'), async (req, res) => {
     fileSize: req.file?.buffer?.length,
   });
 
-  if (!req.file || !req.file.buffer) {
-    console.error('❌ No file buffer received');
-    return res.status(400).send({ success: false, error: 'No file received' });
-  }
-
   try {
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'photo-share' },
+        {
+          folder: 'photo-share',
+          context: {
+            caption: caption || '',
+            user: user || '',
+          },
+        },
         (err, result) => {
-          if (err) {
-            console.error('❌ Cloudinary upload error:', err);
-            return reject(err);
-          }
-          console.log('✅ Cloudinary upload success:', result.secure_url);
+          if (err) return reject(err);
           resolve(result);
         }
       );
       streamifier.createReadStream(req.file.buffer).pipe(stream);
     });
 
-    const newUpload = {
-      url: result.secure_url,
-      caption,
-      user,
-      time: new Date().toISOString()
-    };
-    uploads.push(newUpload);
-    res.send({ success: true });
+    console.log('✅ Cloudinary upload success:', result.secure_url);
+    res.send({ success: true, url: result.secure_url });
   } catch (err) {
-    console.error('❌ Upload failed:', err);
-    res.status(500).send({ success: false, error: 'Upload failed' });
+    console.error('❌ Cloudinary upload error:', err);
+    res.status(500).send({ success: false });
   }
 });
 
-router.get('/', (req, res) => {
-  res.send(uploads);
+// === GET /upload ===
+// Fetch list from Cloudinary (persistent)
+router.get('/', async (req, res) => {
+  try {
+    const result = await cloudinary.search
+      .expression('folder:photo-share')
+      .sort_by('created_at', 'desc')
+      .max_results(30)
+      .execute();
+
+    const cloudUploads = result.resources.map(img => ({
+      url: img.secure_url,
+      caption: img.context?.custom?.caption || '',
+      user: img.context?.custom?.user || '',
+      time: img.created_at
+    }));
+
+    res.send(cloudUploads);
+  } catch (err) {
+    console.error('❌ Cloudinary fetch failed:', err);
+    res.status(500).send({ success: false });
+  }
 });
 
 module.exports = router;
