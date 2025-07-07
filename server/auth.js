@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 
 const USERS = {
-  alice: 'pass123',
-  bob: 'secret',
-  carl: 'abc123'
+  ella: 'badbitch123',
+  linda: 'badbitch123',
+  darylle: 'badbitch123'
 };
 
 // POST /auth/login
