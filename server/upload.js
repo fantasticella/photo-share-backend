@@ -6,29 +6,22 @@ require('dotenv').config();
 
 const router = express.Router();
 
-// ✅ Cloudinary config using .env
+// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// 🧠 In-memory storage for multer
+// Multer setup (memory storage)
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// === POST /upload ===
+// Upload Route
 router.post('/', upload.single('photo'), async (req, res) => {
   const { caption } = req.body;
   const user = req.session.user;
   if (!user) return res.status(401).send();
-
-  console.log('🟡 Upload route hit:', {
-    user,
-    caption,
-    hasFile: !!req.file,
-    fileSize: req.file?.buffer?.length,
-  });
 
   try {
     const result = await new Promise((resolve, reject) => {
@@ -36,9 +29,9 @@ router.post('/', upload.single('photo'), async (req, res) => {
         {
           folder: 'photo-share',
           context: {
-            caption: caption || '',
-            user: user || '',
-          },
+            caption,
+            user
+          }
         },
         (err, result) => {
           if (err) return reject(err);
@@ -51,13 +44,12 @@ router.post('/', upload.single('photo'), async (req, res) => {
     console.log('✅ Cloudinary upload success:', result.secure_url);
     res.send({ success: true, url: result.secure_url });
   } catch (err) {
-    console.error('❌ Cloudinary upload error:', err);
+    console.error('❌ Upload error:', err);
     res.status(500).send({ success: false });
   }
 });
 
-// === GET /upload ===
-// Fetch list from Cloudinary (persistent)
+// Fetch Images Route
 router.get('/', async (req, res) => {
   try {
     const result = await cloudinary.search
@@ -66,17 +58,17 @@ router.get('/', async (req, res) => {
       .max_results(30)
       .execute();
 
-    const cloudUploads = result.resources.map(img => ({
-      url: img.secure_url,
-      caption: img.context?.custom?.caption || '',
-      user: img.context?.custom?.user || '',
-      time: img.created_at
+    const images = result.resources.map(item => ({
+      url: item.secure_url,
+      caption: item.context?.custom?.caption || '',
+      user: item.context?.custom?.user || '',
+      time: item.created_at
     }));
 
-    res.send(cloudUploads);
+    res.send(images);
   } catch (err) {
-    console.error('❌ Cloudinary fetch failed:', err);
-    res.status(500).send({ success: false });
+    console.error('❌ Cloudinary fetch error:', err);
+    res.status(500).send([]);
   }
 });
 
