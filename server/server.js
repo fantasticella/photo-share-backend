@@ -14,7 +14,8 @@ app.set('trust proxy', 1);
 const allowedOrigins = [
   'http://localhost:3000',
   'https://photo-share-frontend-kappa.vercel.app',
-  'https://photo-share-frontend-4lw7qgw98-ellas-projects-3bbca56b.vercel.app'
+  'https://photo-share-frontend-4lw7qgw98-ellas-projects-3bbca56b.vercel.app',
+  'https://photo-share-frontend-git-main-ellas-projects-3bbca56b.vercel.app'
 ];
 
 app.use(cors({
