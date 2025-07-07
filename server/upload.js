@@ -2,10 +2,10 @@ const express = require('express');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const streamifier = require('streamifier');
+const { uploads, saveUploads } = require('./uploads');
 require('dotenv').config();
 
 const router = express.Router();
-let uploads = [];
 
 // Cloudinary config
 cloudinary.config({
@@ -14,11 +14,11 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Use memory storage (not disk)
+// Use memory storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// === Upload route ===
+// === Upload photo ===
 router.post('/', upload.single('photo'), async (req, res) => {
   const { caption } = req.body;
   const user = req.session.user;
@@ -44,6 +44,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
       time: new Date().toISOString()
     };
     uploads.push(newUpload);
+    saveUploads();
     res.send({ success: true });
   } catch (err) {
     console.error('❌ Upload failed:', err);
@@ -56,20 +57,21 @@ router.get('/', (req, res) => {
   res.send(uploads);
 });
 
-// === Delete a photo (only if uploaded by current user) ===
+// === Delete photo (if owner) ===
 router.post('/delete', async (req, res) => {
   const { url } = req.body;
   const user = req.session.user;
   if (!user) return res.status(401).send();
 
-  const photo = uploads.find(p => p.url === url);
-  if (!photo || photo.user !== user) {
+  const index = uploads.findIndex(p => p.url === url);
+  if (index === -1 || uploads[index].user !== user) {
     return res.status(403).send({ success: false, message: 'Not authorized' });
   }
 
   try {
-    await cloudinary.uploader.destroy(photo.public_id);
-    uploads = uploads.filter(p => p.url !== url);
+    await cloudinary.uploader.destroy(uploads[index].public_id);
+    uploads.splice(index, 1); // Remove photo
+    saveUploads();
     res.send({ success: true });
   } catch (err) {
     console.error('❌ Delete failed:', err);
