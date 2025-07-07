@@ -5,19 +5,20 @@ const streamifier = require('streamifier');
 require('dotenv').config();
 
 const router = express.Router();
+let uploads = [];
 
-// Configure Cloudinary
+// Cloudinary config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer setup (memory storage)
+// Use memory storage (not disk)
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Upload Route
+// === Upload route ===
 router.post('/', upload.single('photo'), async (req, res) => {
   const { caption } = req.body;
   const user = req.session.user;
@@ -26,13 +27,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
   try {
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'photo-share',
-          context: {
-            caption,
-            user
-          }
-        },
+        { folder: 'photo-share' },
         (err, result) => {
           if (err) return reject(err);
           resolve(result);
@@ -41,34 +36,44 @@ router.post('/', upload.single('photo'), async (req, res) => {
       streamifier.createReadStream(req.file.buffer).pipe(stream);
     });
 
-    console.log('✅ Cloudinary upload success:', result.secure_url);
-    res.send({ success: true, url: result.secure_url });
+    const newUpload = {
+      url: result.secure_url,
+      public_id: result.public_id,
+      caption,
+      user,
+      time: new Date().toISOString()
+    };
+    uploads.push(newUpload);
+    res.send({ success: true });
   } catch (err) {
-    console.error('❌ Upload error:', err);
+    console.error('❌ Upload failed:', err);
     res.status(500).send({ success: false });
   }
 });
 
-// Fetch Images Route
-router.get('/', async (req, res) => {
+// === Get all uploads ===
+router.get('/', (req, res) => {
+  res.send(uploads);
+});
+
+// === Delete a photo (only if uploaded by current user) ===
+router.post('/delete', async (req, res) => {
+  const { url } = req.body;
+  const user = req.session.user;
+  if (!user) return res.status(401).send();
+
+  const photo = uploads.find(p => p.url === url);
+  if (!photo || photo.user !== user) {
+    return res.status(403).send({ success: false, message: 'Not authorized' });
+  }
+
   try {
-    const result = await cloudinary.search
-      .expression('folder:photo-share')
-      .sort_by('created_at', 'desc')
-      .max_results(30)
-      .execute();
-
-    const images = result.resources.map(item => ({
-      url: item.secure_url,
-      caption: item.context?.custom?.caption || '',
-      user: item.context?.custom?.user || '',
-      time: item.created_at
-    }));
-
-    res.send(images);
+    await cloudinary.uploader.destroy(photo.public_id);
+    uploads = uploads.filter(p => p.url !== url);
+    res.send({ success: true });
   } catch (err) {
-    console.error('❌ Cloudinary fetch error:', err);
-    res.status(500).send([]);
+    console.error('❌ Delete failed:', err);
+    res.status(500).send({ success: false });
   }
 });
 
