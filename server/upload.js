@@ -14,7 +14,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Use memory storage
+// Use memory storage for Multer
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
@@ -43,8 +43,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
       user,
       time: new Date().toISOString()
     };
+
     uploads.push(newUpload);
     saveUploads();
+
     res.send({ success: true });
   } catch (err) {
     console.error('❌ Upload failed:', err);
@@ -57,20 +59,20 @@ router.get('/', (req, res) => {
   res.send(uploads);
 });
 
-// === Delete photo (if owner) ===
+// === Delete photo (no ownership check) ===
 router.post('/delete', async (req, res) => {
   const { url } = req.body;
   const user = req.session.user;
   if (!user) return res.status(401).send();
 
   const index = uploads.findIndex(p => p.url === url);
-  if (index === -1 || uploads[index].user !== user) {
-    return res.status(403).send({ success: false, message: 'Not authorized' });
+  if (index === -1) {
+    return res.status(404).send({ success: false, message: 'Photo not found' });
   }
 
   try {
     await cloudinary.uploader.destroy(uploads[index].public_id);
-    uploads.splice(index, 1); // Remove photo
+    uploads.splice(index, 1);
     saveUploads();
     res.send({ success: true });
   } catch (err) {
