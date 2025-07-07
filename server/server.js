@@ -1,3 +1,5 @@
+require('dotenv').config(); // 
+
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
@@ -9,8 +11,19 @@ const app = express();
 app.set('trust proxy', 1);
 
 // === CORS setup ===
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://photo-share-frontend-4lw7qgw98-ellas-projects-3bbca56b.vercel.app'
+];
+
 app.use(cors({
-  origin: 'https://photo-share-frontend-kappa.vercel.app',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
